@@ -15,8 +15,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Detect project folder
+      - name: Extract zip and detect project folder
         run: |
+          if [ -f PortYouStudio.zip ]; then
+            unzip -q -o PortYouStudio.zip
+          fi
           S=$(find "$GITHUB_WORKSPACE" -maxdepth 3 -name fetch-native-deps.sh -path '*/scripts/*' | head -n1)
           if [ -z "$S" ]; then
             echo "scripts/fetch-native-deps.sh not found. Repo layout:"
