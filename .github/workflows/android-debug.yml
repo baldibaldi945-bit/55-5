@@ -1,0 +1,68 @@
+name: Android debug build
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+env:
+  PROJECT_DIR: ${{ github.workspace }}
+  NDK_VERSION: 20.0.5594570
+  CMAKE_VERSION: 3.10.2.4988404
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Java 17 for Android SDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install legacy SDK packages
+        run: |
+          SDKM="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SDKM" --licenses > /dev/null || true
+          "$SDKM" "platforms;android-28" "build-tools;28.0.3" \
+            "cmake;$CMAKE_VERSION" "ndk;$NDK_VERSION"
+
+      - name: Switch to Java 8 for legacy Gradle
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '8'
+
+      - name: Setup Gradle 4.6
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: '4.6'
+
+      - name: Fetch native and audio dependencies
+        run: |
+          sh "$PROJECT_DIR/scripts/fetch-native-deps.sh"
+          sh "$PROJECT_DIR/scripts/fetch-codecs.sh"
+
+      - name: Sync Android assets
+        run: sh "$PROJECT_DIR/scripts/sync-android-assets.sh"
+
+      - name: Point AGP 3.2.1 to SDK, NDK and CMake
+        run: |
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/$NDK_VERSION" >> "$GITHUB_ENV"
+          cat > "$PROJECT_DIR/android/local.properties" <<EOF
+          sdk.dir=$ANDROID_HOME
+          ndk.dir=$ANDROID_HOME/ndk/$NDK_VERSION
+          cmake.dir=$ANDROID_HOME/cmake/$CMAKE_VERSION
+          EOF
+
+      - name: Build APK
+        run: gradle -p "$PROJECT_DIR/android" --no-daemon assembleDebug --stacktrace
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: PortYouStudio-debug-apk
+          path: ${{ env.PROJECT_DIR }}/android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
