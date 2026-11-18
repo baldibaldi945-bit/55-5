@@ -60,6 +60,12 @@ jobs:
       - name: Sync Android assets
         run: sh "$PROJECT_DIR/scripts/sync-android-assets.sh"
 
+      - name: Raise minSdk to 21 (required by 7-Zip library)
+        run: |
+          sed -i 's/minSdkVersion 14/minSdkVersion 21/' "$PROJECT_DIR/android/app/build.gradle"
+          sed -i 's/android:minSdkVersion="14"/android:minSdkVersion="21"/' "$PROJECT_DIR/android/app/src/main/AndroidManifest.xml"
+          grep -n "minSdkVersion" "$PROJECT_DIR/android/app/build.gradle" "$PROJECT_DIR/android/app/src/main/AndroidManifest.xml"
+
       - name: Point AGP 3.2.1 to SDK, NDK and CMake
         run: |
           cat > "$PROJECT_DIR/android/local.properties" <<EOF
