@@ -65,6 +65,7 @@ jobs:
           F="$PROJECT_DIR/android/app/build.gradle"
           M="$PROJECT_DIR/android/app/src/main/AndroidManifest.xml"
           J="$PROJECT_DIR/android/app/src/main/java/com/axelzerox23/portyou/MainActivity.java"
+          C="$PROJECT_DIR/android/app/src/main/cpp/CMakeLists.txt"
           # 1) minSdk 21 (required by the 7-Zip library)
           sed -i 's/minSdkVersion 14/minSdkVersion 21/' "$F"
           sed -i 's/android:minSdkVersion="14"/android:minSdkVersion="21"/' "$M"
@@ -72,10 +73,14 @@ jobs:
           sed -i "s#implementation 'com.github.omicronapps:7-Zip-JBinding-4Android:Release-16.02-2.03'#implementation('com.github.omicronapps:7-Zip-JBinding-4Android:Release-16.02-2.03') { transitive = false }#" "$F"
           # 3) Java 7 needs final for variables used in inner classes
           sed -i 's/private void extractSevenZipSafely(File archiveFile, File destination)/private void extractSevenZipSafely(final File archiveFile, final File destination)/' "$J"
+          # 4) astc-codec includes use paths relative to its root (src/decoder/codec.h)
+          printf '\n%s\n' 'target_include_directories(astc_codec PUBLIC "${ASTC_CODEC_DIR}")' >> "$C"
+          printf '%s\n' 'target_include_directories(portyou_astc PRIVATE "${ASTC_CODEC_DIR}")' >> "$C"
           grep -q "transitive = false" "$F" || { echo "PATCH FAILED: 7-Zip dependency line"; cat "$F"; exit 1; }
           grep -q "final File destination" "$J" || { echo "PATCH FAILED: MainActivity signature"; exit 1; }
+          grep -q 'PUBLIC "${ASTC_CODEC_DIR}")' "$C" || { echo "PATCH FAILED: CMake include"; exit 1; }
           grep -n "minSdkVersion\|7-Zip" "$F" "$M"
-          grep -n "extractSevenZipSafely(final" "$J"
+          tail -4 "$C"
 
       - name: Point AGP 3.2.1 to SDK, NDK and CMake
         run: |
