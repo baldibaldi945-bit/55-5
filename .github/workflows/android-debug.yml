@@ -60,11 +60,15 @@ jobs:
       - name: Sync Android assets
         run: sh "$PROJECT_DIR/scripts/sync-android-assets.sh"
 
-      - name: Raise minSdk to 21 (required by 7-Zip library)
+      - name: Patch project (minSdk 21, no transitive deps for 7-Zip)
         run: |
-          sed -i 's/minSdkVersion 14/minSdkVersion 21/' "$PROJECT_DIR/android/app/build.gradle"
-          sed -i 's/android:minSdkVersion="14"/android:minSdkVersion="21"/' "$PROJECT_DIR/android/app/src/main/AndroidManifest.xml"
-          grep -n "minSdkVersion" "$PROJECT_DIR/android/app/build.gradle" "$PROJECT_DIR/android/app/src/main/AndroidManifest.xml"
+          F="$PROJECT_DIR/android/app/build.gradle"
+          M="$PROJECT_DIR/android/app/src/main/AndroidManifest.xml"
+          sed -i 's/minSdkVersion 14/minSdkVersion 21/' "$F"
+          sed -i 's/android:minSdkVersion="14"/android:minSdkVersion="21"/' "$M"
+          sed -i "s#implementation 'com.github.omicronapps:7-Zip-JBinding-4Android:Release-16.02-2.03'#implementation('com.github.omicronapps:7-Zip-JBinding-4Android:Release-16.02-2.03') { transitive = false }#" "$F"
+          grep -q "transitive = false" "$F" || { echo "PATCH FAILED: dependency line not found"; cat "$F"; exit 1; }
+          grep -n "minSdkVersion\|7-Zip" "$F" "$M"
 
       - name: Point AGP 3.2.1 to SDK, NDK and CMake
         run: |
@@ -90,6 +94,14 @@ jobs:
             tail -5 /tmp/build.log
           fi
           exit $CODE
+
+      - name: Save full build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: /tmp/build.log
+          if-no-files-found: ignore
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
