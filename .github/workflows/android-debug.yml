@@ -6,7 +6,6 @@ on:
   workflow_dispatch:
 
 env:
-  PROJECT_DIR: ${{ github.workspace }}
   NDK_VERSION: 20.0.5594570
   CMAKE_VERSION: 3.10.2.4988404
 
@@ -15,6 +14,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Detect project folder
+        run: |
+          S=$(find "$GITHUB_WORKSPACE" -maxdepth 3 -name fetch-native-deps.sh -path '*/scripts/*' | head -n1)
+          if [ -z "$S" ]; then
+            echo "scripts/fetch-native-deps.sh not found. Repo layout:"
+            find "$GITHUB_WORKSPACE" -maxdepth 3 -not -path '*/.git/*' | head -60
+            exit 1
+          fi
+          echo "PROJECT_DIR=$(dirname "$(dirname "$S")")" >> "$GITHUB_ENV"
 
       - name: Setup Java 17 for Android SDK
         uses: actions/setup-java@v4
