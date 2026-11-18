@@ -69,7 +69,21 @@ jobs:
           EOF
 
       - name: Build APK
-        run: gradle -p "$PROJECT_DIR/android" --no-daemon assembleDebug --stacktrace
+        run: |
+          set +e
+          gradle -p "$PROJECT_DIR/android" --no-daemon assembleDebug > /tmp/build.log 2>&1
+          CODE=$?
+          if [ $CODE -ne 0 ]; then
+            echo "=========== ERROR SUMMARY ==========="
+            sed -n '/FAILURE:/,/\* Try:/p' /tmp/build.log | head -40
+            echo "=========== FIRST ERRORS ==========="
+            grep -n -i -m 15 "error\|exception\|could not\|failed" /tmp/build.log
+            MSG=$(sed -n '/What went wrong:/,/\* Try:/p' /tmp/build.log | head -8 | tr '\n' ' ' | cut -c1-600)
+            echo "::error::$MSG"
+          else
+            tail -5 /tmp/build.log
+          fi
+          exit $CODE
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
