@@ -60,15 +60,22 @@ jobs:
       - name: Sync Android assets
         run: sh "$PROJECT_DIR/scripts/sync-android-assets.sh"
 
-      - name: Patch project (minSdk 21, no transitive deps for 7-Zip)
+      - name: Patch project
         run: |
           F="$PROJECT_DIR/android/app/build.gradle"
           M="$PROJECT_DIR/android/app/src/main/AndroidManifest.xml"
+          J="$PROJECT_DIR/android/app/src/main/java/com/axelzerox23/portyou/MainActivity.java"
+          # 1) minSdk 21 (required by the 7-Zip library)
           sed -i 's/minSdkVersion 14/minSdkVersion 21/' "$F"
           sed -i 's/android:minSdkVersion="14"/android:minSdkVersion="21"/' "$M"
+          # 2) stop 7-Zip library from pulling appcompat
           sed -i "s#implementation 'com.github.omicronapps:7-Zip-JBinding-4Android:Release-16.02-2.03'#implementation('com.github.omicronapps:7-Zip-JBinding-4Android:Release-16.02-2.03') { transitive = false }#" "$F"
-          grep -q "transitive = false" "$F" || { echo "PATCH FAILED: dependency line not found"; cat "$F"; exit 1; }
+          # 3) Java 7 needs final for variables used in inner classes
+          sed -i 's/private void extractSevenZipSafely(File archiveFile, File destination)/private void extractSevenZipSafely(final File archiveFile, final File destination)/' "$J"
+          grep -q "transitive = false" "$F" || { echo "PATCH FAILED: 7-Zip dependency line"; cat "$F"; exit 1; }
+          grep -q "final File destination" "$J" || { echo "PATCH FAILED: MainActivity signature"; exit 1; }
           grep -n "minSdkVersion\|7-Zip" "$F" "$M"
+          grep -n "extractSevenZipSafely(final" "$J"
 
       - name: Point AGP 3.2.1 to SDK, NDK and CMake
         run: |
@@ -88,7 +95,8 @@ jobs:
             sed -n '/FAILURE:/,/\* Try:/p' /tmp/build.log | head -40
             echo "=========== FIRST ERRORS ==========="
             grep -n -i -m 15 "error\|exception\|could not\|failed" /tmp/build.log
-            MSG=$(sed -n '/What went wrong:/,/\* Try:/p' /tmp/build.log | head -8 | tr '\n' ' ' | cut -c1-600)
+            MSG=$(grep -m 5 -i "error:" /tmp/build.log | tr '\n' ' ' | cut -c1-600)
+            [ -z "$MSG" ] && MSG=$(sed -n '/What went wrong:/,/\* Try:/p' /tmp/build.log | head -8 | tr '\n' ' ' | cut -c1-600)
             echo "::error::$MSG"
           else
             tail -5 /tmp/build.log
